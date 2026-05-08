@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 from contextlib import asynccontextmanager
 from typing import List
-from models import Product
+from models import OrderErrorEvent, Product
 from datetime import datetime, timezone
 import asyncio, json
 
@@ -40,28 +40,28 @@ async def consume(consumer: AIOKafkaConsumer):
             product = products_db.get(order['product_id'])
 
             if product is None:
-                payload = {
-                    "order_id": order['id'],
-                    "product_id": order['product_id'],
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "error_reason": "Proizvod ne postoji u katalogu",
-                }
+                event = OrderErrorEvent(
+                    order_id=order["id"],
+                    product_id=order["product_id"],
+                    timestamp=datetime.now(timezone.utc),
+                    error_reason="Proizvod ne postoji u katalogu",
+                )
                 await producer.send_and_wait(
                     "product_not_found_events",
-                    json.dumps(payload).encode("utf-8"),
+                    event.model_dump_json().encode("utf-8"),
                 )
                 continue
 
             if product.quantity < order['quantity']:
-                payload = {
-                    "order_id": order['id'],
-                    "product_id": order['product_id'],
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "error_reason": "Nedovoljna kolicina na stanju",
-                }
+                event = OrderErrorEvent(
+                    order_id=order["id"],
+                    product_id=order["product_id"],
+                    timestamp=datetime.now(timezone.utc),
+                    error_reason="Nedovoljna količina na stanju",
+                )
                 await producer.send_and_wait(
                     "out_of_stock_events",
-                    json.dumps(payload).encode("utf-8"),
+                    event.model_dump_json().encode("utf-8"),
                 )
                 continue
 

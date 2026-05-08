@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from typing import List
-from models import Notification
+from models import Notification, OrderErrorEvent
 from aiokafka import AIOKafkaConsumer
 from contextlib import asynccontextmanager
 import asyncio, json
@@ -43,13 +43,16 @@ async def consume(consumer: AIOKafkaConsumer):
                     ),
                 )
             elif topic in ("product_not_found_events", "out_of_stock_events"):
+                event = OrderErrorEvent.model_validate_json(
+                    msg.value.decode("utf-8")
+                )
                 notification = Notification(
-                    order_id=data["order_id"],
-                    product_id=data["product_id"],
+                    order_id=event.order_id,
+                    product_id=event.product_id,
                     message=(
-                        f"Narudžbina #{data['order_id']} je odbijena. "
-                        f"Razlog: {data['error_reason']} "
-                        f"(proizvod ID {data['product_id']})."
+                        f"Narudžbina #{event.order_id} je odbijena. "
+                        f"Razlog: {event.error_reason} "
+                        f"(proizvod ID {event.product_id})."
                     ),
                 )
             else:
