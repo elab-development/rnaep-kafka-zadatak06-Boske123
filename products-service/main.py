@@ -52,12 +52,24 @@ async def consume(consumer: AIOKafkaConsumer):
                 )
                 continue
 
-            if product.quantity >= order['quantity']:
-                product.quantity -= order['quantity']
-                await producer.send_and_wait("order-confirmed", json.dumps({
+            if product.quantity < order['quantity']:
+                payload = {
                     "order_id": order['id'],
-                    "product_id": product.id
-                }).encode('utf-8'))
+                    "product_id": order['product_id'],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "error_reason": "Nedovoljna kolicina na stanju",
+                }
+                await producer.send_and_wait(
+                    "out_of_stock_events",
+                    json.dumps(payload).encode("utf-8"),
+                )
+                continue
+
+            product.quantity -= order['quantity']
+            await producer.send_and_wait("order-confirmed", json.dumps({
+                "order_id": order['id'],
+                "product_id": product.id
+            }).encode('utf-8'))
     except asyncio.CancelledError:
         pass
 
